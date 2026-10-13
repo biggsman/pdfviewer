@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 
 const iframe = document.getElementById("viewer") as HTMLIFrameElement;
@@ -39,5 +40,20 @@ uploadBtn.addEventListener("click", async () => {
 
   if (typeof selected === "string") {
     await showPdf(selected);
+  }
+});
+
+const isPdf = (path: string) => path.toLowerCase().endsWith(".pdf");
+
+getCurrentWebview().onDragDropEvent(async (event) => {
+  const { type } = event.payload;
+  if (type === "enter") {
+    document.body.classList.toggle("dragging", event.payload.paths.some(isPdf));
+  } else if (type === "leave") {
+    document.body.classList.remove("dragging");
+  } else if (type === "drop") {
+    document.body.classList.remove("dragging");
+    const pdf = event.payload.paths.find(isPdf);
+    if (pdf) await showPdf(pdf);
   }
 });
