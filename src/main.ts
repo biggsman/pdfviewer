@@ -57,3 +57,6 @@ getCurrentWebview().onDragDropEvent(async (event) => {
     if (pdf) await showPdf(pdf);
   }
 });
+
+const startupPdf = await invoke<string | null>("get_startup_pdf");
+if (startupPdf) await showPdf(startupPdf);

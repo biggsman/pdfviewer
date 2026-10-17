@@ -10,6 +10,13 @@ fn read_pdf_as_base64(path: String) -> Result<String, String> {
     Ok(general_purpose::STANDARD.encode(&buffer))
 }
 
+#[tauri::command]
+fn get_startup_pdf() -> Option<String> {
+    std::env::args()
+        .skip(1)
+        .find(|arg| arg.to_lowercase().ends_with(".pdf"))
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -19,7 +26,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_pdf_as_base64])
+        .invoke_handler(tauri::generate_handler![read_pdf_as_base64, get_startup_pdf])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
