@@ -79,9 +79,9 @@ npm run tauri build
 | 결과물              | 위치                                                              |
 | ------------------- | ----------------------------------------------------------------- |
 | 실행 파일           | `src-tauri/target/release/pdfviewer.exe`                          |
-| Windows 설치 (.msi) | `src-tauri/target/release/bundle/msi/pdfviewer_0.1.0_x64_en-US.msi` |
-| Windows 설치 (.exe) | `src-tauri/target/release/bundle/nsis/pdfviewer_0.1.0_x64-setup.exe` |
-| Linux 설치 (.deb)   | `src-tauri/target/release/bundle/deb/pdfviewer_0.1.0_amd64.deb`   |
+| Windows 설치 (.msi) | `src-tauri/target/release/bundle/msi/pdfviewer_0.2.0_x64_en-US.msi` |
+| Windows 설치 (.exe) | `src-tauri/target/release/bundle/nsis/pdfviewer_0.2.0_x64-setup.exe` |
+| Linux 설치 (.deb)   | `src-tauri/target/release/bundle/deb/pdfviewer_0.2.0_amd64.deb`   |
 
 > Linux에서 빌드하려면 `libwebkit2gtk` 등 Tauri 사전 요구사항이 설치되어 있어야 합니다.
 
