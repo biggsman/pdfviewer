@@ -11,6 +11,11 @@ fn read_pdf_as_base64(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn write_text_file(path: String, contents: String) -> Result<(), String> {
+    fs::write(path, contents).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_startup_pdf() -> Option<String> {
     std::env::args()
         .skip(1)
@@ -26,7 +31,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_pdf_as_base64, get_startup_pdf])
+        .invoke_handler(tauri::generate_handler![read_pdf_as_base64, get_startup_pdf, write_text_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
