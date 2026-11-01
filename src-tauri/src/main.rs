@@ -16,6 +16,12 @@ fn write_text_file(path: String, contents: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn write_binary_file(path: String, contents: String) -> Result<(), String> {
+    let bytes = general_purpose::STANDARD.decode(contents).map_err(|e| e.to_string())?;
+    fs::write(path, bytes).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_startup_pdf() -> Option<String> {
     std::env::args()
         .skip(1)
@@ -31,7 +37,12 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_pdf_as_base64, get_startup_pdf, write_text_file])
+        .invoke_handler(tauri::generate_handler![
+            read_pdf_as_base64,
+            get_startup_pdf,
+            write_text_file,
+            write_binary_file
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -1,35 +1,45 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { isEditorOpen, openEditor, type PdfFile } from "./pageEditor";
+import { openPdfjsDocument } from "./pdfjs";
 
 const iframe = document.getElementById("viewer") as HTMLIFrameElement;
 const uploadBtn = document.getElementById("uploadBtn") as HTMLButtonElement;
+const editBtn = document.getElementById("editBtn") as HTMLButtonElement;
+const mergeBtn = document.getElementById("mergeBtn") as HTMLButtonElement;
+const printBtn = document.getElementById("printBtn") as HTMLButtonElement;
 const exportBtn = document.getElementById("exportBtn") as HTMLButtonElement;
+
+const PDF_FILTER = [{ name: "PDF Files", extensions: ["pdf"] }];
 
 let currentUrl: string | null = null;
 let currentPath: string | null = null;
 let currentBytes: Uint8Array | null = null;
 
+async function readPdf(path: string): Promise<Uint8Array> {
+  const base64 = await invoke<string>("read_pdf_as_base64", { path });
+  return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+}
+
+async function writePdf(path: string, bytes: Uint8Array): Promise<void> {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  await invoke("write_binary_file", { path, contents: btoa(binary) });
+}
+
 async function showPdf(filePath: string) {
   try {
-    const base64 = await invoke<string>("read_pdf_as_base64", {
-      path: filePath,
-    });
-    const binary = atob(base64);
-    const len = binary.length;
-    const bytes = new Uint8Array(len);
-
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-
+    const bytes = await readPdf(filePath);
     const blob = new Blob([bytes], { type: "application/pdf" });
     const url = URL.createObjectURL(blob);
     if (currentUrl) URL.revokeObjectURL(currentUrl);
     currentUrl = url;
     currentPath = filePath;
     currentBytes = bytes;
-    exportBtn.disabled = false;
+    exportBtn.disabled = editBtn.disabled = printBtn.disabled = false;
     iframe.src = url;
     iframe.style.display = "block";
   } catch (err) {
@@ -39,11 +49,7 @@ async function showPdf(filePath: string) {
 }
 
 uploadBtn.addEventListener("click", async () => {
-  const selected = await open({
-    multiple: false,
-    filters: [{ name: "PDF Files", extensions: ["pdf"] }],
-  });
-
+  const selected = await open({ multiple: false, filters: PDF_FILTER });
   if (typeof selected === "string") {
     await showPdf(selected);
   }
@@ -52,6 +58,7 @@ uploadBtn.addEventListener("click", async () => {
 const isPdf = (path: string) => path.toLowerCase().endsWith(".pdf");
 
 getCurrentWebview().onDragDropEvent(async (event) => {
+  if (isEditorOpen()) return;
   const { type } = event.payload;
   if (type === "enter") {
     document.body.classList.toggle("dragging", event.payload.paths.some(isPdf));
@@ -64,8 +71,44 @@ getCurrentWebview().onDragDropEvent(async (event) => {
   }
 });
 
-const startupPdf = await invoke<string | null>("get_startup_pdf");
-if (startupPdf) await showPdf(startupPdf);
+function startEditor(files: PdfFile[]) {
+  document.body.classList.add("editing");
+  openEditor(files, {
+    readFile: readPdf,
+    writeFile: writePdf,
+    onClose: (savedPath) => {
+      document.body.classList.remove("editing");
+      if (savedPath) showPdf(savedPath);
+    },
+  });
+}
+
+editBtn.addEventListener("click", () => {
+  if (currentBytes && currentPath) startEditor([{ path: currentPath, bytes: currentBytes }]);
+});
+
+mergeBtn.addEventListener("click", async () => {
+  const chosen = await open({ multiple: true, filters: PDF_FILTER, title: "합칠 PDF를 2개 이상 선택하세요" });
+  if (!chosen) return;
+  const paths = Array.isArray(chosen) ? chosen : [chosen];
+  if (paths.length < 2) {
+    alert("합칠 PDF를 2개 이상 선택해 주세요. (Ctrl 또는 Shift를 누른 채로 여러 개를 고를 수 있습니다)");
+    return;
+  }
+  try {
+    const files: PdfFile[] = [];
+    for (const path of paths) files.push({ path, bytes: await readPdf(path) });
+    startEditor(files);
+  } catch (err) {
+    alert("PDF를 불러오지 못했습니다: " + err);
+    console.error(err);
+  }
+});
+
+printBtn.addEventListener("click", () => {
+  iframe.contentWindow?.focus();
+  iframe.contentWindow?.print();
+});
 
 async function exportMarkdown() {
   if (!currentBytes || !currentPath) return;
@@ -73,17 +116,10 @@ async function exportMarkdown() {
   const label = exportBtn.textContent;
   exportBtn.textContent = "변환 중…";
   try {
-    const [pdfjs, { default: workerUrl }, { pdfToMarkdown }] = await Promise.all([
-      import("pdfjs-dist"),
-      import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
+    const [task, { pdfToMarkdown }] = await Promise.all([
+      openPdfjsDocument(currentBytes),
       import("./pdfToMarkdown"),
     ]);
-    pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-    const task = pdfjs.getDocument({
-      data: currentBytes.slice(),
-      cMapUrl: "/cmaps/",
-      cMapPacked: true,
-    });
     const markdown = await pdfToMarkdown(await task.promise);
     await task.destroy();
 
@@ -109,3 +145,6 @@ async function exportMarkdown() {
 }
 
 exportBtn.addEventListener("click", exportMarkdown);
+
+const startupPdf = await invoke<string | null>("get_startup_pdf");
+if (startupPdf) await showPdf(startupPdf);
